@@ -1,20 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Encouragement Wall | 鼓励墙</title>
+  <title>鼓励墙 / Encouragement Wall</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background:#f7f7fb; }
     .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
     .card { background:#fff; border-radius: 16px; padding: 16px; margin: 12px 0; box-shadow: 0 4px 18px rgba(0,0,0,.06); }
     .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
     button { border:0; border-radius: 12px; padding: 10px 14px; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
     .primary { background:#111; color:#fff; }
     .ghost { background:#eee; }
     .tag { display:inline-block; padding: 4px 10px; background:#eef; border-radius:999px; font-size:12px; margin-top:8px;}
     .muted { color:#666; font-size:13px; }
     .pill { border-radius:999px; padding: 6px 10px; background:#f0f0f0; font-size:12px; }
+    .modalBg { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; padding:16px;}
+    .modal { width:min(640px, 100%); background:#fff; border-radius:16px; padding:16px; box-shadow:0 10px 40px rgba(0,0,0,.25);}
+    textarea, select { width:100%; border-radius: 12px; border:1px solid #ddd; padding:12px; font-size:14px; }
+    textarea { min-height: 96px; }
+    .two { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:640px){ .two{ grid-template-columns:1fr; } }
+    .hr { height:1px; background:#eee; margin:12px 0; }
+    .small { font-size:12px; color:#666; }
   </style>
 </head>
 <body>
@@ -22,49 +31,289 @@
     <div class="card">
       <div class="row">
         <h1 style="margin:0">鼓励墙 / Encouragement Wall</h1>
-        <span class="pill">中文 + English</span>
+        <span class="pill" id="status">连接中… / Connecting…</span>
       </div>
       <p class="muted" style="margin-top:8px">
-        全球公开：只鼓励、不评判。 / Public worldwide: encouragement only, no judgment.
+        全球公开：只鼓励、不评判。请勿填写姓名、电话、地址等隐私。<br/>
+        Public worldwide: encouragement only, no judgment. Don’t include personal info.
       </p>
       <div class="row" style="margin-top:12px">
-        <button class="primary" onclick="alert('下一步我们会把发帖做成真的（数据库+留言）')">发一条压力 / Post stress</button>
-        <button class="ghost" onclick="alert('下一步我们会把留言鼓励做成真的（回复功能）')">写一句鼓励 / Encourage</button>
-        <button class="ghost" onclick="toggleOnly()">只看鼓励 / Encouragement only</button>
+        <button class="primary" id="btnPost">发一条压力 / Post stress</button>
+        <button class="ghost" id="btnRefresh">刷新 / Refresh</button>
+        <button class="ghost" id="btnOnly">只看鼓励 / Encouragement only: OFF</button>
       </div>
     </div>
 
     <div id="feed"></div>
   </div>
 
-  <script>
-    let onlyEnc = false;
-    const sample = [
-      { type:'stress', content:'我好累，但我还在撑。', tag:'焦虑 / Anxiety' },
-      { type:'reply', content:'你能撑到现在已经很了不起了。我在这里陪你。', tag:'温柔 / Gentle' },
-      { type:'stress', content:'I feel overwhelmed and scared.', tag:'Work / 工作' },
-      { type:'reply', content:'You’re doing your best—and that matters. I’m with you.', tag:'Firm / 坚定' },
-    ];
+  <!-- Post modal -->
+  <div class="modalBg" id="postBg">
+    <div class="modal">
+      <div class="row">
+        <h3 style="margin:0">发一条压力 / Post stress</h3>
+        <button class="ghost" id="postClose">关闭 / Close</button>
+      </div>
+      <div class="hr"></div>
+      <div class="two">
+        <div>
+          <label class="small">标签 / Tag</label>
+          <select id="postTag">
+            <option value="study">学习 / Study</option>
+            <option value="work">工作 / Work</option>
+            <option value="relationships">关系 / Relationships</option>
+            <option value="health">健康 / Health</option>
+            <option value="anxiety">焦虑 / Anxiety</option>
+            <option value="other" selected>其他 / Other</option>
+          </select>
+        </div>
+        <div>
+          <label class="small">语言 / Language</label>
+          <select id="postLang">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="mixed" selected>Mixed</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label class="small">内容（1~120字）/ Content (1~120 chars)</label>
+        <textarea id="postContent" maxlength="120" placeholder="一句就好。这里不分析，只给你力量。 / One sentence is enough."></textarea>
+      </div>
+      <div class="row" style="margin-top:12px; justify-content:flex-end">
+        <button class="primary" id="postSubmit">发布 / Post</button>
+      </div>
+    </div>
+  </div>
 
-    function render(){
-      const feed = document.getElementById('feed');
-      feed.innerHTML = '';
-      sample.filter(x => !onlyEnc || x.type==='reply').forEach(x=>{
-        const div = document.createElement('div');
-        div.className = 'card';
+  <!-- Reply modal -->
+  <div class="modalBg" id="replyBg">
+    <div class="modal">
+      <div class="row">
+        <h3 style="margin:0">写一句鼓励 / Encourage</h3>
+        <button class="ghost" id="replyClose">关闭 / Close</button>
+      </div>
+      <div class="hr"></div>
+      <div class="small" id="replyTo"></div>
+      <div class="two" style="margin-top:10px">
+        <div>
+          <label class="small">语气 / Tone</label>
+          <select id="replyTone">
+            <option value="gentle" selected>温柔 / Gentle</option>
+            <option value="firm">坚定 / Firm</option>
+            <option value="funny">轻松 / Funny</option>
+          </select>
+        </div>
+        <div>
+          <label class="small">语言 / Language</label>
+          <select id="replyLang">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="mixed" selected>Mixed</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <label class="small">鼓励内容（1~120字）/ Encouragement (1~120 chars)</label>
+        <textarea id="replyContent" maxlength="120" placeholder="只鼓励，不评判。 / Encouragement only."></textarea>
+      </div>
+      <div class="row" style="margin-top:12px; justify-content:flex-end">
+        <button class="primary" id="replySubmit">发布 / Post</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    // ====== 只改这里两行（你自己粘贴，不要发出来）======
+    const SUPABASE_URL = "https://yrmcwcsjgvomqgbochld.supabase.co";     // 形如 https://xxxx.supabase.co
+    const SUPABASE_ANON_KEY = "sb_publishable_h_oKx14an-jk7QFpiyRJYQ_2jU9CDxJ"; // 形如 sb_publishable_...
+    // ====================================================
+
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+    const feedEl = $("feed");
+    let onlyEnc = false;
+    let replyPostId = null;
+
+    function esc(s){
+      return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function tagLabel(tag){
+      const map = {study:"学习 / Study",work:"工作 / Work",relationships:"关系 / Relationships",health:"健康 / Health",anxiety:"焦虑 / Anxiety",other:"其他 / Other"};
+      return map[tag] || "其他 / Other";
+    }
+    function toneLabel(t){
+      const map = { gentle:"温柔 / Gentle", firm:"坚定 / Firm", funny:"轻松 / Funny" };
+      return map[t] || "温柔 / Gentle";
+    }
+
+    async function testConnection(){
+      try{
+        const { error } = await sb.from("posts").select("id").limit(1);
+        if(error) throw error;
+        statusEl.textContent = "已连接 / Connected";
+      }catch(e){
+        statusEl.textContent = "连接失败 / Connection failed";
+        console.error(e);
+        alert("连接 Supabase 失败：请检查 SUPABASE_URL（不要带 /rest/v1）和 Publishable key 是否粘贴正确。");
+      }
+    }
+
+    async function loadWall(){
+      feedEl.innerHTML = `<div class="card muted">加载中… / Loading…</div>`;
+      const { data: posts, error: e1 } = await sb
+        .from("posts")
+        .select("id, content, tag, created_at")
+        .order("created_at", { ascending:false })
+        .limit(30);
+
+      if(e1){
+        feedEl.innerHTML = `<div class="card">读取失败：${esc(e1.message)}</div>`;
+        return;
+      }
+
+      const postIds = (posts||[]).map(p=>p.id);
+      let repliesByPost = {};
+      if(postIds.length){
+        const { data: replies } = await sb
+          .from("replies")
+          .select("id, post_id, content, tone, created_at")
+          .in("post_id", postIds)
+          .order("created_at", { ascending:true });
+
+        (replies||[]).forEach(r=>{
+          (repliesByPost[r.post_id] ||= []).push(r);
+        });
+      }
+
+      render(posts||[], repliesByPost);
+    }
+
+    function render(posts, repliesByPost){
+      feedEl.innerHTML = "";
+      if(!posts.length){
+        feedEl.innerHTML = `<div class="card muted">还没有内容。你可以发第一条。 / No posts yet. Be the first.</div>`;
+        return;
+      }
+
+      for(const p of posts){
+        const rs = repliesByPost[p.id] || [];
+
+        if(onlyEnc){
+          for(const r of rs){
+            const div = document.createElement("div");
+            div.className = "card";
+            div.innerHTML = `
+              <div style="font-weight:700">鼓励 / Encouragement</div>
+              <div style="margin-top:10px; font-size:16px; line-height:1.5">${esc(r.content)}</div>
+              <div class="tag">${toneLabel(r.tone)}</div>
+            `;
+            feedEl.appendChild(div);
+          }
+          continue;
+        }
+
+        const div = document.createElement("div");
+        div.className = "card";
         div.innerHTML = `
-          <div style="font-weight:600">${x.type==='stress'?'压力 / Stress':'鼓励 / Encouragement'}</div>
-          <div style="margin-top:10px; font-size:16px; line-height:1.5">${escapeHtml(x.content)}</div>
-          <div class="tag">${x.tag}</div>
+          <div class="row">
+            <div style="font-weight:700">压力 / Stress</div>
+            <button class="ghost" data-reply="${p.id}">给TA一句鼓励 / Encourage</button>
+          </div>
+          <div style="margin-top:10px; font-size:16px; line-height:1.5">${esc(p.content)}</div>
+          <div class="tag">${tagLabel(p.tag)}</div>
+          ${rs.length ? `<div class="hr"></div>` : ``}
+          ${rs.map(r=>`
+            <div style="margin-top:10px">
+              <div style="font-weight:650">鼓励 / Encouragement</div>
+              <div style="margin-top:6px; line-height:1.5">${esc(r.content)}</div>
+              <div class="tag">${toneLabel(r.tone)}</div>
+            </div>
+          `).join("")}
         `;
-        feed.appendChild(div);
+        feedEl.appendChild(div);
+      }
+
+      feedEl.querySelectorAll("button[data-reply]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          replyPostId = btn.getAttribute("data-reply");
+          $("replyTo").innerHTML = `<b>对这句压力写鼓励：</b>`;
+          $("replyContent").value = "";
+          $("replyBg").style.display = "flex";
+        });
       });
+
+      if(onlyEnc && !feedEl.children.length){
+        feedEl.innerHTML = `<div class="card muted">还没有鼓励内容。先给第一句鼓励吧。 / No encouragement yet.</div>`;
+      }
     }
-    function toggleOnly(){ onlyEnc = !onlyEnc; render(); }
-    function escapeHtml(s){
-      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    function openPost(){ $("postContent").value=""; $("postBg").style.display="flex"; }
+    function closePost(){ $("postBg").style.display="none"; }
+    function closeReply(){ $("replyBg").style.display="none"; }
+
+    async function submitPost(){
+      const content = $("postContent").value.trim();
+      const tag = $("postTag").value;
+      const lang = $("postLang").value;
+      if(content.length < 1){ alert("至少写一个字 / Please write something"); return; }
+
+      $("postSubmit").disabled = true;
+      try{
+        const { error } = await sb.from("posts").insert([{ content, tag, lang }]);
+        if(error) throw error;
+        closePost();
+        await loadWall();
+      }catch(e){
+        console.error(e);
+        alert("发布失败 / Post failed: " + (e.message || e));
+      }finally{
+        $("postSubmit").disabled = false;
+      }
     }
-    render();
+
+    async function submitReply(){
+      const content = $("replyContent").value.trim();
+      const tone = $("replyTone").value;
+      const lang = $("replyLang").value;
+      if(!replyPostId){ alert("post id missing"); return; }
+      if(content.length < 1){ alert("至少写一个字 / Please write something"); return; }
+
+      $("replySubmit").disabled = true;
+      try{
+        const { error } = await sb.from("replies").insert([{ post_id: replyPostId, content, tone, lang }]);
+        if(error) throw error;
+        closeReply();
+        await loadWall();
+      }catch(e){
+        console.error(e);
+        alert("发布失败 / Post failed: " + (e.message || e));
+      }finally{
+        $("replySubmit").disabled = false;
+      }
+    }
+
+    $("btnPost").addEventListener("click", openPost);
+    $("btnRefresh").addEventListener("click", loadWall);
+    $("btnOnly").addEventListener("click", ()=>{
+      onlyEnc = !onlyEnc;
+      $("btnOnly").textContent = onlyEnc ? "只看鼓励 / Encouragement only: ON" : "只看鼓励 / Encouragement only: OFF";
+      loadWall();
+    });
+
+    $("postClose").addEventListener("click", closePost);
+    $("replyClose").addEventListener("click", closeReply);
+    $("postSubmit").addEventListener("click", submitPost);
+    $("replySubmit").addEventListener("click", submitReply);
+
+    $("postBg").addEventListener("click", (e)=>{ if(e.target=== $("postBg")) closePost(); });
+    $("replyBg").addEventListener("click", (e)=>{ if(e.target=== $("replyBg")) closeReply(); });
+
+    (async ()=>{ await testConnection(); await loadWall(); })();
   </script>
 </body>
 </html>
