@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Encouragement Wall | 鼓励墙</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background:#f7f7fb; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
+    .card { background:#fff; border-radius: 16px; padding: 16px; margin: 12px 0; box-shadow: 0 4px 18px rgba(0,0,0,.06); }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    button { border:0; border-radius: 12px; padding: 10px 14px; cursor:pointer; }
+    .primary { background:#111; color:#fff; }
+    .ghost { background:#eee; }
+    .tag { display:inline-block; padding: 4px 10px; background:#eef; border-radius:999px; font-size:12px; margin-top:8px;}
+    .muted { color:#666; font-size:13px; }
+    .pill { border-radius:999px; padding: 6px 10px; background:#f0f0f0; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="row">
+        <h1 style="margin:0">鼓励墙 / Encouragement Wall</h1>
+        <span class="pill">中文 + English</span>
+      </div>
+      <p class="muted" style="margin-top:8px">
+        全球公开：只鼓励、不评判。 / Public worldwide: encouragement only, no judgment.
+      </p>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" onclick="alert('下一步我们会把发帖做成真的（数据库+留言）')">发一条压力 / Post stress</button>
+        <button class="ghost" onclick="alert('下一步我们会把留言鼓励做成真的（回复功能）')">写一句鼓励 / Encourage</button>
+        <button class="ghost" onclick="toggleOnly()">只看鼓励 / Encouragement only</button>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+  </div>
+
+  <script>
+    let onlyEnc = false;
+    const sample = [
+      { type:'stress', content:'我好累，但我还在撑。', tag:'焦虑 / Anxiety' },
+      { type:'reply', content:'你能撑到现在已经很了不起了。我在这里陪你。', tag:'温柔 / Gentle' },
+      { type:'stress', content:'I feel overwhelmed and scared.', tag:'Work / 工作' },
+      { type:'reply', content:'You’re doing your best—and that matters. I’m with you.', tag:'Firm / 坚定' },
+    ];
+
+    function render(){
+      const feed = document.getElementById('feed');
+      feed.innerHTML = '';
+      sample.filter(x => !onlyEnc || x.type==='reply').forEach(x=>{
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `
+          <div style="font-weight:600">${x.type==='stress'?'压力 / Stress':'鼓励 / Encouragement'}</div>
+          <div style="margin-top:10px; font-size:16px; line-height:1.5">${escapeHtml(x.content)}</div>
+          <div class="tag">${x.tag}</div>
+        `;
+        feed.appendChild(div);
+      });
+    }
+    function toggleOnly(){ onlyEnc = !onlyEnc; render(); }
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    render();
+  </script>
+</body>
+</html>
